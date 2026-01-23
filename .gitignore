@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 src/dtachwrap/_vendor/bin/
+
+# Agent
+.agent/
