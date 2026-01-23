@@ -38,3 +38,7 @@ cp dtach "$VENDOR_BIN_DIR/dtach"
 chmod 755 "$VENDOR_BIN_DIR/dtach"
 
 echo "dtach built and placed in $VENDOR_BIN_DIR/dtach"
+
+# Cleanup artifacts to keep wheel clean (and satisfy auditwheel)
+echo "Cleaning up build artifacts..."
+rm -f dtach *.o
