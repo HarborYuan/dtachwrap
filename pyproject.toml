@@ -1,0 +1,38 @@
+[project]
+name = "dtachwrap"
+version = "0.1.0"
+description = "Python wrapper for dtach with built-in binary management"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "License :: OSI Approved :: MIT License",
+]
+
+[project.scripts]
+dtachwrap = "dtachwrap.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/HarborYuan/dtachwrap"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dtachwrap = [
+    "_vendor/bin/*",
+    "_vendor/licenses/*",
+    "_vendor/src/dtach/**/*",
+    "_vendor/NOTICE"
+]
+
+[tool.bdist_wheel]
+universal = false

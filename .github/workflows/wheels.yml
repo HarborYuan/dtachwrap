@@ -1,0 +1,70 @@
+name: Build Wheels
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.16.5
+        env:
+          # Targets: Linux x86_64 and aarch64
+          CIBW_ARCHS_LINUX: x86_64 aarch64
+          
+          # Only build one python version to save time, since we re-tag as py3
+          CIBW_BUILD: cp310-manylinux*
+          
+          # Skip musllinux as per user request (non-goal)
+          CIBW_SKIP: "*-musllinux_*"
+          
+          # Install deps and build dtach
+          # manylinux2014 uses yum (CentOS 7)
+          CIBW_BEFORE_BUILD_LINUX: >
+            yum install -y ncurses-devel &&
+            bash scripts/build_dtach.sh
+            
+          # Ensure auditwheel runs
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
+          
+          CIBW_TEST_COMMAND: "dtachwrap --help"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
