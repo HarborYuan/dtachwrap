@@ -68,3 +68,23 @@ dtachwrap stop train-exp1
 
 This project is licensed under MIT.
 The bundled `dtach` binary is GPL-2.0. See `src/dtachwrap/_vendor/licenses/DTACH_COPYING`.
+
+## Development
+
+This project uses `uv` for dependency management.
+
+1. **Setup**:
+   ```bash
+   uv sync
+   ```
+
+2. **Run locally**:
+   ```bash
+   uv run dtachwrap --help
+   ```
+
+3. **Build**:
+   ```bash
+   uv build
+   ```
+
