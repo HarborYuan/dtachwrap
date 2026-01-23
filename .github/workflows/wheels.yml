@@ -40,6 +40,8 @@ jobs:
           # Install deps and build dtach
           # manylinux2014 uses yum (CentOS 7)
           CIBW_BEFORE_BUILD_LINUX: >
+            sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* &&
+            sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* &&
             yum install -y ncurses-devel &&
             bash scripts/build_dtach.sh
             
