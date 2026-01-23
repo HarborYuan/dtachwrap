@@ -1,0 +1,3 @@
+[submodule "src/dtachwrap/_vendor/src/dtach"]
+	path = src/dtachwrap/_vendor/src/dtach
+	url = https://github.com/crigler/dtach
