@@ -33,9 +33,6 @@ jobs:
           # Targets: Linux x86_64 and aarch64
           CIBW_ARCHS_LINUX: x86_64 aarch64
           
-          # Only build one python version to save time, since we re-tag as py3
-          CIBW_BUILD: cp310-manylinux*
-          
           # Skip musllinux as per user request (non-goal)
           CIBW_SKIP: "*-musllinux_*"
           
@@ -67,6 +64,9 @@ jobs:
           submodules: true
 
       - uses: astral-sh/setup-uv@v5
+
+      - name: Build binary for sdist
+        run: bash scripts/build_dtach.sh
 
       - name: Build sdist
         run: uv build --sdist
