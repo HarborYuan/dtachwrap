@@ -222,8 +222,12 @@ def logs(
     elif stderr:
         log_file = meta.stderr_path
     else:
-        # Default to joint log
-        log_file = meta.joint_path if meta.joint_path else meta.stdout_path
+        # Default to joint log if available (for tasks created with new version)
+        # Fall back to stdout for backward compatibility with old tasks
+        if meta.joint_path and Path(meta.joint_path).exists():
+            log_file = meta.joint_path
+        else:
+            log_file = meta.stdout_path
         
     if not Path(log_file).exists():
         typer.echo(f"Log file not found: {log_file}", err=True)

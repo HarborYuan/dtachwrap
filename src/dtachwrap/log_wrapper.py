@@ -56,7 +56,8 @@ def tee_joint_stream(stdout_fd, stderr_fd, joint_file_path, stdout_file_path, st
                         individual_file.write(data)
                         individual_file.flush()
                         
-                        # Write to stdout (all output goes to stdout in joint mode)
+                        # Write to stdout (both stdout and stderr are written to stdout for dtach visibility)
+                        # This allows dtach to display all output in the attached terminal
                         try:
                             os.write(sys.stdout.fileno(), data)
                         except OSError:
