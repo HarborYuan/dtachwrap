@@ -39,6 +39,7 @@ def start(
     meta_path = root_path / "meta" / f"{clean_name}.json"
     log_out = root_path / "logs" / f"{clean_name}.out"
     log_err = root_path / "logs" / f"{clean_name}.err"
+    log_combined = root_path / "logs" / f"{clean_name}.log"
     
     # Socket path length check
     if len(str(socket_path)) > 100:
@@ -59,7 +60,7 @@ def start(
     
     # Use internal python wrapper to capture logs
     # This works cross-platform (where python is available) and handle separate streams
-    wrapper_cmd = [sys.executable, "-u", "-m", "dtachwrap.log_wrapper", "--out", str(log_out), "--err", str(log_err), "--"] + command
+    wrapper_cmd = [sys.executable, "-u", "-m", "dtachwrap.log_wrapper", "--out", str(log_out), "--err", str(log_err), "--log", str(log_combined), "--"] + command
     
     cmd_args = [dtach_exe, "-N", str(socket_path), "--"] + wrapper_cmd
     
@@ -96,6 +97,7 @@ def start(
         socket_path=str(socket_path),
         stdout_path=str(log_out),
         stderr_path=str(log_err),
+        log_path=str(log_combined),
         started_at=datetime.now().isoformat()
     )
     
@@ -107,7 +109,7 @@ def start(
     
     typer.echo(f"Started task '{clean_name}'")
     typer.echo(f"  Socket: {socket_path}")
-    typer.echo(f"  Logs: {log_out}")
+    typer.echo(f"  Logs: {log_combined}")
     typer.echo(f"  PID: {p.pid} (dtach)" + (f", {meta.child_pid} (task)" if meta.child_pid else ""))
 
 
@@ -192,29 +194,40 @@ def ls(
 def logs(
     name: str,
     follow: bool = typer.Option(False, "-f", "--follow", help="Follow log output"),
-    err: bool = typer.Option(False, "--err", help="Show stderr instead of stdout"),
+    stdout: bool = typer.Option(False, "--stdout", help="Show stdout only"),
+    stderr: bool = typer.Option(False, "--stderr", help="Show stderr only"),
     root: Optional[Path] = typer.Option(None),
 ):
     """
-    Show logs for a task.
+    Show logs for a task (joint stdout+stderr by default).
     """
+    if stdout and stderr:
+        typer.echo("Cannot use both --stdout and --stderr.", err=True)
+        raise typer.Exit(1)
+
     root_path = state.get_root(root)
     clean_name = state.sanitize_name(name)
     meta = state.TaskMeta.load(clean_name, root_path)
     if not meta:
         typer.echo(f"Task '{clean_name}' not found.", err=True)
         raise typer.Exit(1)
-        
-    log_file = meta.stderr_path if err else meta.stdout_path
-    if not Path(log_file).exists():
+
+    if stdout:
+        log_file = meta.stdout_path
+    elif stderr:
+        log_file = meta.stderr_path
+    else:
+        log_file = meta.log_path or meta.stdout_path  # fallback for tasks started before log_path existed
+
+    if not log_file or not Path(log_file).exists():
         typer.echo(f"Log file not found: {log_file}", err=True)
         raise typer.Exit(1)
-        
+
     cmd = ["tail", "-n", "200"]
     if follow:
         cmd.append("-f")
     cmd.append(log_file)
-    
+
     os.execvp("tail", cmd)
 
 @app.command()
