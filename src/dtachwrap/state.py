@@ -28,6 +28,7 @@ class TaskMeta:
     stderr_path: str
     started_at: str
     child_pid: Optional[int] = None
+    joint_path: Optional[str] = None
     
     def save(self, root: Path):
         path = root / "meta" / f"{self.name}.json"

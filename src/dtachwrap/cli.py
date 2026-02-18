@@ -39,6 +39,7 @@ def start(
     meta_path = root_path / "meta" / f"{clean_name}.json"
     log_out = root_path / "logs" / f"{clean_name}.out"
     log_err = root_path / "logs" / f"{clean_name}.err"
+    log_joint = root_path / "logs" / f"{clean_name}.log"
     
     # Socket path length check
     if len(str(socket_path)) > 100:
@@ -54,12 +55,11 @@ def start(
         raise typer.Exit(1)
         
     # Open logs
-    f_out = open(log_out, "a")
-    f_err = open(log_err, "a")
+    f_joint = open(log_joint, "a")
     
     # Use internal python wrapper to capture logs
-    # This works cross-platform (where python is available) and handle separate streams
-    wrapper_cmd = [sys.executable, "-u", "-m", "dtachwrap.log_wrapper", "--out", str(log_out), "--err", str(log_err), "--"] + command
+    # This works cross-platform (where python is available) and handle joint stream
+    wrapper_cmd = [sys.executable, "-u", "-m", "dtachwrap.log_wrapper", "--joint", str(log_joint), "--"] + command
     
     cmd_args = [dtach_exe, "-N", str(socket_path), "--"] + wrapper_cmd
     
@@ -68,8 +68,8 @@ def start(
         p = subprocess.Popen(
             cmd_args,
             cwd=str(cwd),
-            stdout=f_out,
-            stderr=f_err,
+            stdout=f_joint,
+            stderr=f_joint,
             stdin=subprocess.DEVNULL,
             start_new_session=True # setsid
         )
@@ -96,6 +96,7 @@ def start(
         socket_path=str(socket_path),
         stdout_path=str(log_out),
         stderr_path=str(log_err),
+        joint_path=str(log_joint),
         started_at=datetime.now().isoformat()
     )
     
@@ -107,7 +108,7 @@ def start(
     
     typer.echo(f"Started task '{clean_name}'")
     typer.echo(f"  Socket: {socket_path}")
-    typer.echo(f"  Logs: {log_out}")
+    typer.echo(f"  Logs: {log_joint}")
     typer.echo(f"  PID: {p.pid} (dtach)" + (f", {meta.child_pid} (task)" if meta.child_pid else ""))
 
 
@@ -192,11 +193,12 @@ def ls(
 def logs(
     name: str,
     follow: bool = typer.Option(False, "-f", "--follow", help="Follow log output"),
-    err: bool = typer.Option(False, "--err", help="Show stderr instead of stdout"),
+    stdout: bool = typer.Option(False, "--stdout", help="Show only stdout"),
+    stderr: bool = typer.Option(False, "--stderr", help="Show only stderr"),
     root: Optional[Path] = typer.Option(None),
 ):
     """
-    Show logs for a task.
+    Show logs for a task. By default, shows the joint stdout/stderr stream.
     """
     root_path = state.get_root(root)
     clean_name = state.sanitize_name(name)
@@ -204,8 +206,21 @@ def logs(
     if not meta:
         typer.echo(f"Task '{clean_name}' not found.", err=True)
         raise typer.Exit(1)
+    
+    # Check for mutually exclusive options
+    if stdout and stderr:
+        typer.echo("Error: --stdout and --stderr cannot be used together.", err=True)
+        raise typer.Exit(1)
         
-    log_file = meta.stderr_path if err else meta.stdout_path
+    # Determine which log file to show
+    if stdout:
+        log_file = meta.stdout_path
+    elif stderr:
+        log_file = meta.stderr_path
+    else:
+        # Default to joint log
+        log_file = meta.joint_path if meta.joint_path else meta.stdout_path
+        
     if not Path(log_file).exists():
         typer.echo(f"Log file not found: {log_file}", err=True)
         raise typer.Exit(1)

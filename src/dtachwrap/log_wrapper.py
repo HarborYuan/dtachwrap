@@ -3,6 +3,7 @@ import subprocess
 import threading
 import argparse
 import os
+import select
 
 def tee_stream(src_fd, dest_file_path, std_fd):
     """Reads from src_fd, writes to dest_file_path and std_fd."""
@@ -26,10 +27,40 @@ def tee_stream(src_fd, dest_file_path, std_fd):
     except Exception as e:
         pass # Ignore errors to avoid crashing wrapper
 
+def tee_joint_stream(stdout_fd, stderr_fd, dest_file_path):
+    """Reads from both stdout_fd and stderr_fd, writes to dest_file_path and stdout."""
+    try:
+        with open(dest_file_path, "ab") as f:
+            fds = [stdout_fd, stderr_fd]
+            while fds:
+                ready, _, _ = select.select(fds, [], [])
+                for fd in ready:
+                    try:
+                        data = os.read(fd, 4096)
+                        if not data:
+                            # EOF - remove from list
+                            fds.remove(fd)
+                            continue
+                        # Write to log file
+                        f.write(data)
+                        f.flush()
+                        # Write to stdout
+                        try:
+                            os.write(sys.stdout.fileno(), data)
+                        except OSError:
+                            pass
+                    except OSError:
+                        # Error reading, remove fd
+                        if fd in fds:
+                            fds.remove(fd)
+    except Exception as e:
+        pass # Ignore errors to avoid crashing wrapper
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", required=True)
-    parser.add_argument("--err", required=True)
+    parser.add_argument("--out", required=False)
+    parser.add_argument("--err", required=False)
+    parser.add_argument("--joint", required=False)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -41,8 +72,9 @@ def main():
     if not cmd:
         return
 
-    # Buffer size 0? unbuffered text?
-    # We work with bytes.
+    # Force PYTHONUNBUFFERED=1
+    env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'
     
     # Start subprocess
     # stdin inherits
@@ -51,11 +83,19 @@ def main():
         stdin=sys.stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        bufsize=0 # unbuffered
+        bufsize=0, # unbuffered
+        env=env
     )
 
-    t1 = threading.Thread(target=tee_stream, args=(p.stdout.fileno(), args.out, sys.stdout))
-    t2 = threading.Thread(target=tee_stream, args=(p.stderr.fileno(), args.err, sys.stderr))
+    if args.joint:
+        # Joint stream mode
+        t = threading.Thread(target=tee_joint_stream, args=(p.stdout.fileno(), p.stderr.fileno(), args.joint))
+        threads = [t]
+    else:
+        # Separate streams mode
+        t1 = threading.Thread(target=tee_stream, args=(p.stdout.fileno(), args.out, sys.stdout))
+        t2 = threading.Thread(target=tee_stream, args=(p.stderr.fileno(), args.err, sys.stderr))
+        threads = [t1, t2]
     
     import signal
     def forward_signal(sig, frame):
@@ -66,14 +106,14 @@ def main():
     signal.signal(signal.SIGTERM, forward_signal)
     signal.signal(signal.SIGINT, forward_signal)
     
-    t1.start()
-    t2.start()
+    for t in threads:
+        t.start()
     
     # Wait for process
     p.wait()
     
-    t1.join()
-    t2.join()
+    for t in threads:
+        t.join()
     
     sys.exit(p.returncode)
 
