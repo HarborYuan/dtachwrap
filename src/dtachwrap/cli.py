@@ -59,9 +59,13 @@ def start(
     
     # Use internal python wrapper to capture logs
     # This works cross-platform (where python is available) and handle joint stream
-    wrapper_cmd = [sys.executable, "-u", "-m", "dtachwrap.log_wrapper", "--joint", str(log_joint), "--"] + command
+    wrapper_cmd = [sys.executable, "-u", "-m", "dtachwrap.log_wrapper", 
+                   "--joint", str(log_joint), 
+                   "--out", str(log_out), 
+                   "--err", str(log_err), 
+                   "--"] + command
     
-    cmd_args = [dtach_exe, "-N", str(socket_path), "--"] + wrapper_cmd
+    cmd_args = [dtach_exe, "-N", str(socket_path)] + wrapper_cmd
     
     # Launch
     try:

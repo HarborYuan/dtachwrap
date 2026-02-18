@@ -27,32 +27,44 @@ def tee_stream(src_fd, dest_file_path, std_fd):
     except Exception as e:
         pass # Ignore errors to avoid crashing wrapper
 
-def tee_joint_stream(stdout_fd, stderr_fd, dest_file_path):
-    """Reads from both stdout_fd and stderr_fd, writes to dest_file_path and stdout."""
+def tee_joint_stream(stdout_fd, stderr_fd, joint_file_path, stdout_file_path, stderr_file_path):
+    """Reads from both stdout_fd and stderr_fd, writes to joint file and separate files."""
     try:
-        with open(dest_file_path, "ab") as f:
-            fds = [stdout_fd, stderr_fd]
-            while fds:
-                ready, _, _ = select.select(fds, [], [])
+        with open(joint_file_path, "ab") as f_joint, \
+             open(stdout_file_path, "ab") as f_out, \
+             open(stderr_file_path, "ab") as f_err:
+            
+            fds = {stdout_fd: (f_out, sys.stdout), stderr_fd: (f_err, sys.stderr)}
+            fd_list = list(fds.keys())
+            
+            while fd_list:
+                ready, _, _ = select.select(fd_list, [], [])
                 for fd in ready:
                     try:
                         data = os.read(fd, 4096)
                         if not data:
                             # EOF - remove from list
-                            fds.remove(fd)
+                            fd_list.remove(fd)
                             continue
-                        # Write to log file
-                        f.write(data)
-                        f.flush()
-                        # Write to stdout
+                        
+                        # Write to joint log file
+                        f_joint.write(data)
+                        f_joint.flush()
+                        
+                        # Write to individual log file
+                        individual_file, std_fd = fds[fd]
+                        individual_file.write(data)
+                        individual_file.flush()
+                        
+                        # Write to stdout (all output goes to stdout in joint mode)
                         try:
                             os.write(sys.stdout.fileno(), data)
                         except OSError:
                             pass
                     except OSError:
                         # Error reading, remove fd
-                        if fd in fds:
-                            fds.remove(fd)
+                        if fd in fd_list:
+                            fd_list.remove(fd)
     except Exception as e:
         pass # Ignore errors to avoid crashing wrapper
 
@@ -88,11 +100,18 @@ def main():
     )
 
     if args.joint:
-        # Joint stream mode
-        t = threading.Thread(target=tee_joint_stream, args=(p.stdout.fileno(), p.stderr.fileno(), args.joint))
+        # Joint stream mode - requires both --out and --err to be specified
+        if not args.out or not args.err:
+            sys.stderr.write("Error: --joint requires both --out and --err to be specified\n")
+            sys.exit(1)
+        t = threading.Thread(target=tee_joint_stream, args=(
+            p.stdout.fileno(), p.stderr.fileno(), args.joint, args.out, args.err))
         threads = [t]
     else:
         # Separate streams mode
+        if not args.out or not args.err:
+            sys.stderr.write("Error: both --out and --err are required\n")
+            sys.exit(1)
         t1 = threading.Thread(target=tee_stream, args=(p.stdout.fileno(), args.out, sys.stdout))
         t2 = threading.Thread(target=tee_stream, args=(p.stderr.fileno(), args.err, sys.stderr))
         threads = [t1, t2]
